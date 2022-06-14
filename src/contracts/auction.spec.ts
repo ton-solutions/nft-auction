@@ -83,6 +83,36 @@ describe('Auction contract', () => {
     
             expect(res.exit_code).toBe(100)
         })
+
+        it('Reserves minimal storage fee', async () => {
+            const res = await deploy()
+    
+            for(var action of res.actionList) {
+                if (action.type === 'reserve_currency') {
+                    expect(action.currency.coins.eq(new BN(MIN_STORAGE_FEE))).toBe(true)
+                    expect(action.mode).toBe(0)
+                    return;
+                }
+            }
+            fail('Message not found')
+        })
+
+        it('Sends unused TONs to the NFT', async () => {
+            const res = await deploy()
+    
+            for(var action of res.actionList) {
+                if (action.type === 'send_msg'
+                    && action.message.info.type === 'internal'
+                    && action.message.info.dest?.equals(marketplace)) {
+                    expect(action.mode).toBe(
+                        SendMode.CARRRY_ALL_REMAINING_BALANCE
+                        + SendMode.IGNORE_ERRORS
+                    )
+                    return;
+                }
+            }
+            fail('Message not found')
+        })
     })
 
     describe('Owner assignment', () => {

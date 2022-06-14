@@ -350,6 +350,8 @@ global int bid_time;
     if (~(initialized)) {
         throw_unless(100, equal_slices(message_address, marketplace_address));
         initialized = true;
+        raw_reserve(min_storage_fee(), 0);
+        send_money(message_address, 0, null(), 128 + 2);
         save_data();
         return ();
     }

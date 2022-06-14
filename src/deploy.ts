@@ -2,7 +2,7 @@ import { promises } from "fs";
 import path from "path";
 import { Address, CommonMessageInfo, contractAddress, InternalMessage, SendMode, WalletContract, WalletV3R2Source } from "ton";
 import { KeyPair, mnemonicToWalletKey } from "ton-crypto";
-import { AuctionConfig, AuctionContractSource, MIN_STORAGE_FEE } from "./contracts/auction";
+import { AuctionConfig, AuctionContractSource, MIN_STORAGE_FEE, PROCESSING_FEE } from "./contracts/auction";
 import { client } from "./client";
 import { DeploySale } from "./contracts/marketplace";
 import { readMnemonic } from "./read-mnemonic";
@@ -22,10 +22,10 @@ async function deploy(config: AuctionConfig, walletKeys: KeyPair): Promise<Addre
         order: new InternalMessage({
             to: config.marketplaceAddress,
             bounce: true,
-            value: MIN_STORAGE_FEE + 50_000_000,
+            value: PROCESSING_FEE + 50_000_000,
             body: new CommonMessageInfo({
                 body: new DeploySale(
-                    MIN_STORAGE_FEE,
+                    PROCESSING_FEE,
                     contract.initialCode,
                     contract.initialData
                 )
