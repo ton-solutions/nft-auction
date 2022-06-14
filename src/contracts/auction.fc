@@ -363,6 +363,8 @@ global int bid_time;
         throw_unless(102, equal_slices(message_address, nft_address));
         in_msg_body~skip_bits(64); ;; query_id
         owner_address = in_msg_body~load_msg_addr();
+        raw_reserve(min_storage_fee(), 2);
+        send_money(message_address, 0, null(), 128 + 2);
         save_data();
     } elseif (op == op::accept()) {
         throw_if(111, msg_value < processing_fees());
