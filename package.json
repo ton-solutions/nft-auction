@@ -1,0 +1,30 @@
+{
+  "name": "auction",
+  "version": "1.0.0",
+  "description": "TON NFT Auction Smart-Contract",
+  "main": "index.js",
+  "scripts": {
+    "build": "rm -rf dist/ && tsc && cp src/contracts/*.fc dist/contracts/ && node ./dist/compile-func.js",
+    "accept": "npm run build && node ./dist/accept.js",
+    "cancel": "npm run build && node ./dist/cancel.js",
+    "deploy": "npm run build && node ./dist/deploy.js",
+    "test": "npm run build && jest --no-watchman ./dist/**/*.spec.js"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.1.0",
+    "@types/jest": "^28.1.0",
+    "@types/node": "17.0.22",
+    "dotenv": "^16.0.0",
+    "jest": "27.4.7",
+    "ton-compiler": "1.0.0",
+    "ton-contract-executor": "0.5.0",
+    "ton-crypto": "3.2.0",
+    "tweetnacl": "1.0.3",
+    "typescript": "4.6.2"
+  },
+  "author": "ton-solutions",
+  "license": "WTFPL",
+  "dependencies": {
+    "ton": "^11"
+  }
+}

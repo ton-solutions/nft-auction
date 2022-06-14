@@ -1,0 +1,381 @@
+int equal_slices (slice a, slice b) asm "SDEQ";
+builder store_builder(builder to, builder what) asm(what to) "STB";
+;; auction
+int op::accept() asm "0x1e064098 PUSHINT";
+int op::cancel() asm "0x5616c572 PUSHINT";
+;; nft
+int op::ownership_assigned() asm "0x05138d91 PUSHINT";
+int op::transfer() asm "0x5fcc3d14 PUSHINT";
+
+int default_cooldown_time() asm "15 PUSHINT";
+
+;; Because of the gas fees of op::tranfser operation is generally unknown
+;; auction methods requires as much fees as possible
+int processing_fees() asm "1000000000 PUSHINT"; ;; 1 TON
+int min_storage_fee() asm "100000000 PUSHINT"; ;; 0.1 TON
+
+;; bidder_address:MsgAddress
+;; bid_amount:Gram
+;; bid_time:uint64 = Bid;
+;;
+;; numerator:uint16 denominmator:uint16
+;; destination:MsgAddress = Royalty;
+;;
+;; threshold:uint64
+;; extension:uint64 = AntiSniping;
+;;
+;; initialized:Bool
+;; marketplace_address:MsgAddress
+;; nft_address:MsgAddress
+;; min_bid:Grams
+;; max_bid:(Maybe Grams)
+;; auction_finish_time:(Maybe uint64)
+;; cooldown_time:(Maybe uint64)
+;; anti_sniping:(Maybe ^AntiSniping)
+;; marketplace_fee:(Maybe ^Royalty)
+;; royalties:(Maybe ^Royalty)
+;; owner_address:(Maybe MsgAddress)
+;; bid:(Maybe ^Bid) = Data;
+
+global int initialized;
+global slice marketplace_address;
+global slice nft_address;
+global int min_bid;
+global int max_bid;
+global int auction_finish_time;
+global int marketplace_fee_numerator;
+global int marketplace_fee_denominator;
+global slice marketplace_fee_destination;
+global int royalty_numerator;
+global int royalty_denominator;
+global slice royalty_destination;
+global int cooldown_time;
+global int anti_sniping_threshold;
+global int anti_sniping_extension;
+global slice owner_address;
+global slice bidder_address;
+global int bid_amount;
+global int bid_time;
+
+(int) has_bid() inline {
+    return ~(null?(bid_amount))
+        & ~(null?(bidder_address))
+        & ~(null?(bid_time));
+}
+
+(int) has_marketplace_fee() inline {
+    return ~(null?(marketplace_fee_numerator)) & ~(null?(marketplace_fee_denominator));
+}
+
+(int) has_royalty_fee() inline {
+    return ~(null?(royalty_numerator))
+        & ~(null?(royalty_denominator))
+        & ~(null?(royalty_destination));
+}
+
+(int) anti_sniping_enabled() inline {
+    return ~(null?(anti_sniping_threshold))
+        & ~(null?(anti_sniping_extension));
+}
+
+() load_data() impure {
+    var data = get_data().begin_parse();
+    initialized = data~load_int(1);
+    marketplace_address = data~load_msg_addr();
+    nft_address = data~load_msg_addr();
+    min_bid = data~load_grams();
+    max_bid = data~load_int(1)
+        ? data~load_grams()
+        : null();
+    auction_finish_time = data~load_int(1)
+        ? data~load_uint(64)
+        : null();
+    if (data~load_int(1)) {
+        var marketplace_fee = data~load_ref().begin_parse();
+        marketplace_fee_numerator = marketplace_fee~load_uint(16);
+        marketplace_fee_denominator = marketplace_fee~load_uint(16);
+        marketplace_fee_destination = marketplace_fee~load_msg_addr();
+    } else {
+        marketplace_fee_numerator = null();
+        marketplace_fee_denominator = null();
+        marketplace_fee_destination = null();
+    }
+    if (data~load_int(1)) {
+        var royalty = data~load_ref().begin_parse();
+        royalty_numerator = royalty~load_uint(16);
+        royalty_denominator = royalty~load_uint(16);
+        royalty_destination = royalty~load_msg_addr();
+    } else {
+        royalty_numerator = null();
+        royalty_denominator = null();
+        royalty_destination = null();
+    }
+    cooldown_time = data~load_int(1)
+        ? data~load_uint(64)
+        : default_cooldown_time();
+    if (data~load_int(1)) {
+        var anti_sniping = data~load_ref().begin_parse();
+        anti_sniping_threshold = anti_sniping~load_uint(64);
+        anti_sniping_extension = anti_sniping~load_uint(64);
+    } else {
+        anti_sniping_threshold = null();
+        anti_sniping_extension = null();
+    }
+    owner_address = data~load_int(1)
+        ? data~load_msg_addr()
+        : null();
+    if (data~load_int(1)) {
+        var bid = data~load_ref().begin_parse();
+        bidder_address = bid~load_msg_addr();
+        bid_amount = bid~load_grams();
+        bid_time = bid~load_uint(64);
+    } else {
+        bidder_address = null();
+        bid_amount = null();
+        bid_time = null();
+    }
+}
+
+() save_data() impure {
+    var data = begin_cell()
+        .store_int(initialized, 1)
+        .store_slice(marketplace_address)
+        .store_slice(nft_address)
+        .store_grams(min_bid);
+    if (null?(max_bid)) {
+        data = data.store_int(false, 1);
+    } else {
+        data = data.store_int(true, 1)
+            .store_grams(max_bid);
+    }
+    if (null?(auction_finish_time)) {
+        data = data.store_int(false, 1);
+    } else {
+        data = data.store_int(true, 1)
+            .store_uint(auction_finish_time, 64);
+    }
+    if (has_marketplace_fee()) {
+        var marketplace_fee = begin_cell()
+            .store_uint(marketplace_fee_numerator, 16)
+            .store_uint(marketplace_fee_denominator, 16)
+            .store_slice(marketplace_fee_destination)
+            .end_cell();
+        data = data.store_int(true, 1)
+            .store_ref(marketplace_fee);
+    } else {
+        data = data.store_int(false, 1);
+    }
+    if (has_royalty_fee()) {
+        var royalty = begin_cell()
+            .store_uint(royalty_numerator, 16)
+            .store_uint(royalty_denominator, 16)
+            .store_slice(royalty_destination)
+            .end_cell();
+        data = data.store_int(true, 1)
+            .store_ref(royalty);
+    } else {
+        data = data.store_int(false, 1);
+    }
+    if (cooldown_time != default_cooldown_time()) {
+        data = data.store_int(true, 1)
+            .store_uint(cooldown_time, 64);
+    } else {
+        data = data.store_int(false, 1);
+    }
+    if (anti_sniping_enabled()) {
+        var anti_sniping = begin_cell()
+            .store_uint(anti_sniping_threshold, 64)
+            .store_uint(anti_sniping_extension, 64)
+            .end_cell();
+        data = data.store_int(true, 1)
+            .store_ref(anti_sniping);
+    } else {
+        data = data.store_int(false, 1);
+    }
+    if (null?(owner_address)) {
+        data = data.store_int(false, 1);
+    } else {
+        data = data.store_int(true, 1)
+            .store_slice(owner_address);
+    }
+    if (has_bid()) {
+        var bid = begin_cell()
+            .store_slice(bidder_address)
+            .store_grams(bid_amount)
+            .store_uint(bid_time, 64)
+            .end_cell();
+        data = data.store_int(true, 1)
+            .store_ref(bid);
+    } else {
+        data = data.store_int(false, 1);
+    } 
+    set_data(data.end_cell());
+}
+
+() send_message(int bounced, slice addr, int amount, builder body, int mode) impure {
+    var message = begin_cell()
+        .store_uint(0, 1) ;; int_msg_info
+            .store_uint(1, 1) ;; ihr_disabled
+            .store_int(0, 1) ;; bounce
+            .store_int(bounced, 1) ;; bounced
+            .store_uint(0, 2) ;; src: addr_none
+            .store_slice(addr) ;; dest
+            .store_grams(amount) ;; grams
+                .store_uint(0, 1) ;; other
+            .store_grams(0) ;; ihr_fee
+            .store_grams(0) ;; fwd_fee
+            .store_uint(0, 64) ;; created_lt
+            .store_uint(0, 32) ;; created_at
+        .store_uint(0, 1) ;; init
+        .store_uint(0, 1); ;; body
+    ifnot (null?(body)) {
+        message = message.store_builder(body);
+    } else {
+        message = message.store_uint(0, 32);
+    }
+    send_raw_message(message.end_cell(), null?(mode) ? 1 : mode);
+}
+
+() send_money(slice addr, int amount, builder body, int mode) impure {
+  send_message(false, addr, amount, body, mode);
+}
+
+(int) exceeds_max_bid(int value) {
+    if (~(null?(max_bid))) {
+      return value >= max_bid;
+    }
+    return false;
+}
+
+(int) is_finished() method_id {
+    if (has_bid()) {
+        if (exceeds_max_bid(bid_amount)) {
+            return true;
+        } elseif (~(null?(auction_finish_time))) {
+            return auction_finish_time <= now();
+        } else {
+            return (now() - bid_time) >= cooldown_time;
+        }
+    } else {
+        return false;
+    }
+}
+
+() send_nft_and_destroy(slice new_owner, slice response_destination) impure {
+    var message = begin_cell()
+           .store_uint(0x18, 6) 
+           .store_slice(nft_address)
+           .store_grams(0)
+           .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+           .store_uint(op::transfer(), 32)
+           .store_uint(now(), 64)
+           .store_slice(new_owner) ;; new_owner_address
+           .store_slice(response_destination) ;; response_address
+           .store_int(0, 1) ;; empty custom_payload
+           .store_grams(0) ;; forward amount to new_owner_address
+           .store_int(0, 1) ;; empty forward_payload
+           .end_cell();
+    send_raw_message(message, 128 + 32);
+}
+
+() accept(slice message_address) impure {
+    throw_unless(105, has_bid());
+    if (null?(auction_finish_time) & ~(is_finished())) {
+        throw_unless(106, equal_slices(owner_address, message_address));
+    } else {
+        throw_unless(107, is_finished());
+    }
+    var change = null?(max_bid) ? 0 : bid_amount - max_bid;
+    if (change > 0) {
+        send_money(bidder_address, change, null(), null());
+        bid_amount -= change;
+    }
+    var full_bid = bid_amount;
+    if (has_marketplace_fee()) {
+        var fee = full_bid * marketplace_fee_numerator * 100 / marketplace_fee_denominator;
+        var (_, prefix) = marketplace_fee_destination.load_uint(2);
+        var destination = prefix == 0 ? marketplace_address : marketplace_fee_destination;
+        send_money(destination, fee, null(), null());
+        bid_amount -= fee;
+    }
+    if (has_royalty_fee()) {
+        var fee = full_bid * royalty_numerator * 100 / royalty_denominator;
+        send_money(royalty_destination, fee, null(), null());
+        bid_amount -= fee;
+    }
+    send_money(owner_address, bid_amount, null(), null());
+    send_nft_and_destroy(bidder_address, message_address);
+}
+
+() bid(slice address, int amount) impure {
+    amount -= processing_fees();
+    throw_unless(104, amount >= min_bid);
+    if (is_finished()) {
+        var body = begin_cell()
+            .store_uint(0xffffffff, 32);
+        send_message(true, address, 0, body, 64);
+        accept(address);
+        return ();
+    }
+    if (has_bid()) {
+        throw_unless(103, amount > bid_amount);
+        send_money(bidder_address, bid_amount, null(), null());
+    }
+    bidder_address = address;
+    bid_amount = amount;
+    bid_time = now();
+    if (anti_sniping_enabled()) {
+        if (bid_time >= (auction_finish_time - anti_sniping_threshold)) {
+            auction_finish_time += anti_sniping_extension;
+        }
+    }
+    if (is_finished()) {
+        accept(bidder_address);
+        return ();
+    }
+    raw_reserve(bid_amount + min_storage_fee(), 0);
+    ;; Unfortunatelly 64 mode bypasses reserve action
+    send_money(bidder_address, 0, null(), 128);
+    save_data();
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    var cs = in_msg_full.begin_parse();
+    cs~skip_bits(3);
+    if (cs~load_int(1)) {
+        return ();
+    }
+    var message_address = cs~load_msg_addr();
+    load_data();
+    if (~(initialized)) {
+        throw_unless(100, equal_slices(message_address, marketplace_address));
+        initialized = true;
+        save_data();
+        return ();
+    }
+    if (slice_empty?(in_msg_body)) {
+        bid(message_address, msg_value);
+        return ();
+    }
+    var op = in_msg_body~load_uint(32);
+    if (op == op::ownership_assigned()) {
+        throw_unless(101, null?(owner_address));
+        throw_unless(102, equal_slices(message_address, nft_address));
+        in_msg_body~skip_bits(64); ;; query_id
+        owner_address = in_msg_body~load_msg_addr();
+        save_data();
+    } elseif (op == op::accept()) {
+        throw_if(111, msg_value < processing_fees());
+        accept(message_address);
+    } elseif (op == op::cancel()) {
+        throw_if(111, msg_value < processing_fees());
+        throw_unless(108, equal_slices(owner_address, message_address));
+        throw_if(109, is_finished());
+        if (has_bid()) {
+            send_money(bidder_address, bid_amount, null(), null());
+        }
+        send_nft_and_destroy(owner_address, message_address);
+    } else {
+        bid(message_address, msg_value);
+    }
+}
