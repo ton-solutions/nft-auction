@@ -43,11 +43,19 @@ Sent from NFT after being transfered to the auction
 ownership_assigned#05138d91 query_id:uint64 prev_owner:MsgAddress forward_payload:(Either Cell ^Cell) = Message;
 ```
 
+Return codes:
+- 101 - NFT already transfered
+- 102 - Message source differs from NFT address
+
 ### Bid
 
 ```
 bid#00000000 = Message;
 ```
+
+Return codes:
+- 103 - Bid amount is less than current bid
+- 104 - Bid amount is less than minimum
 
 ### Cancel
 
@@ -55,11 +63,25 @@ bid#00000000 = Message;
 cancel#5616c572 = Message;
 ```
 
+Return codes:
+- 108 - Message source differs from owner address
+- 109 - Auction is already finished
+
 ### Accept
 
 ```
 accept#1e064098 = Message;
 ```
+
+Return codes:
+- 105 - No bid placed
+- 106 - Message source differs from owner address
+- 107 - Auction is not finished yet
+
+### General return codes
+
+- 100 - Deploy source address differs from marketplace address
+- 111 - Message value less than processing fee
 
 ## Scripts
 
